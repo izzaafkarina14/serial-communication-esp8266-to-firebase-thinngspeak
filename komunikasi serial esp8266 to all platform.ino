@@ -11,17 +11,17 @@
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 25200);  // GMT+7 for Jakarta, Indonesia
 
-#define WIFI_SSID "bangg?"
-#define WIFI_PASSWORD "hwvv1213"
-#define API_KEY "AIzaSyBnPADOix0EWKu29eysInzDlbA5Rvv9Lz8"
-#define DATABASE_URL "https://bismillah-ambil-data-beneran-default-rtdb.asia-southeast1.firebasedatabase.app"
+#define WIFI_SSID "POHARIN D177B_plus"
+#define WIFI_PASSWORD "AsampaiZ"
+#define API_KEY "AIzaSyDx7mrbc4leZbB9bIN2eW9kGCzw2ZAu0ac"
+#define DATABASE_URL "https://komunikasi-data-1f4ca-default-rtdb.asia-southeast1.firebasedatabase.app"
 
 //THINGSPEAK
-// WiFiClient klien;
 const char* server = "api.thingspeak.com";
-const long unsigned int CHANNEL_ID = 2474972; // Replace with your ThingSpeak Channel ID
-const char* apiKey = "TGV422YJ3IVZY879"; // Replace with your ThingSpeak API Key
+const long unsigned int CHANNEL_ID = 2474972;
+const char* apiKey = "TGV422YJ3IVZY879";
 
+//FIREBASE
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
@@ -33,8 +33,8 @@ String msg;
 String dt[7];
 String receiver;
 
-int MQ6, MQ4, MQ138, MQ135, k;
-void sendThing(int MQ135, int k, String receivedTime, int rssi);
+int ppm6, ppm4, ppm138, ppm135, k;
+//void sendThing(float ppm135, int k, String receivedTime, int rssi);
 
 WiFiClient client;
 
@@ -68,7 +68,7 @@ void setup() {
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
 
-  /* connection to firebase */
+  // Menghubungkan ke Firebase
   if (Firebase.signUp(&config, &auth, "", "")) {
     Serial.println("Firebase connection successful");
     signupOK = true;
@@ -76,33 +76,29 @@ void setup() {
     Serial.printf("Firebase connection failed: %s\n", config.signer.signupError.message.c_str());
   }
 
-  /* Assign the callback function for the long running token generation task */
-  config.token_status_callback = tokenStatusCallback;  //see addons/TokenHelper.h
+  config.token_status_callback = tokenStatusCallback;
 
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
 
-  // Initialize NTP client
+  // Inisialisasi NTP client
   timeClient.begin();
   timeClient.setTimeOffset(25200);  // GMT+7 for Jakarta, Indonesia
-
-  // client.setInsecure();
-  // ThingSpeak.begin(klien);
 }
 
 void loop() {
-  // Get current time
+  // Mengambil nilai saat ini
   timeClient.update();
 
-  // Get RSSI value
+  // Mengambil nilai RSSI
   rssi = WiFi.RSSI();
 
-  // Update Firebase with value & timestamp
+  // Update nilai di firebase dan timestamp
   if (Firebase.ready() && signupOK) {
     Firebase.RTDB.setInt(&fbdo, "WiFi/RSSI", rssi);  // Simpan nilai RSSI ke Firebase
   }
 
-  // Baca data yang dikirim dari Arduino
+  // Baca data yang dikirim dari ATmega2560
   while (Serial.available() > 0) {
     msg = Serial.readString();
 
@@ -118,47 +114,49 @@ void loop() {
       }
     }
 
-    // Extract MQ & sampling value
-    MQ6 = dt[0].toInt();
-    MQ4 = dt[1].toInt();
-    MQ138 = dt[2].toInt();
-    MQ135 = dt[3].toInt();
+    // Convert received strings to float with specific decimal precision
+    float ppm6_float = dt[0].toFloat();
+    float ppm4_float = dt[1].toFloat();
+    float ppm138_float = dt[2].toFloat();
+    float ppm135_float = dt[3].toFloat();
     k = dt[4].toInt();  // sampling ke-
 
-    sendThing(MQ135, k, receiver, rssi);
+    sendThing(ppm135_float, k, receiver, rssi);
+
+    // // Convert float to String with specific decimal precision
+    // String ppm4_str = String(ppm4_float, 5); // 3 decimal places
 
     // Dapatkan waktu saat data diterima
     String receivedTime = timeClient.getFormattedTime();
 
-    // Update Firebase with value & timestamp
+    // Update nilai di Firebase dan timestamp
     if (Firebase.ready() && signupOK) {
-      Firebase.RTDB.setFloat(&fbdo, "MQ6 Sensor/Value", MQ6);
-      Firebase.RTDB.setFloat(&fbdo, "MQ4 Sensor/Value", MQ4);
-      Firebase.RTDB.setFloat(&fbdo, "MQ138 Sensor/Value", MQ138);
-      Firebase.RTDB.setString(&fbdo, "MQ135 Sensor/Value", MQ135);
+      Firebase.RTDB.setFloat(&fbdo, "MQ6 Sensor/Value", ppm6_float);
+      Firebase.RTDB.setFloat(&fbdo, "MQ4 Sensor/Value", ppm4_float);
+      Firebase.RTDB.setFloat(&fbdo, "MQ138 Sensor/Value", ppm138_float);
+      Firebase.RTDB.setFloat(&fbdo, "MQ135 Sensor/Value", ppm135_float);
       Firebase.RTDB.setString(&fbdo, "Sampling ke-", k);
       Firebase.RTDB.setString(&fbdo, "Receiver/Time", receivedTime);
     }
   }
 }
 
-    void sendThing(int MQ135, int k, String receivedTime, int rssi) {
+    void sendThing(float ppm135_float, int k, String receivedTime, int rssi) {
       if (client.connect(server, 80)) {
         String postStr = apiKey;
-        postStr += "&field1=" + String(MQ135) + "&field2=" + String(rssi) + "&field3=" + String(k) + "\r\n\r\n";
+        postStr += "&field1=" + String(ppm135_float) + "&field2=" + String(rssi) + "&field3=" + String(k) + "\r\n\r\n";
 
         client.print("POST /update HTTP/1.1\n");
         client.print("Host: api.thingspeak.com\n");
         client.print("Connection: close\n");
         client.print(String("X-THINGSPEAKAPIKEY: ") + apiKey + "\n");
-        //client.print("X-THINGSPEAKAPIKEY: " + apiKey + "\n");
         client.print("Content-Type: application/x-www-form-urlencoded\n");
         client.print("Content-Length: ");
         client.print(postStr.length());
         client.print("\n\n");
         client.print(postStr);
 
-        Serial.print("MQ135: " + String(MQ135) + " | RSSI: " + String(rssi) + " | Sampling: " + String(k));
+        Serial.print("MQ135: " + String(ppm135_float) + " | RSSI: " + String(rssi) + " | Sampling: " + String(k));
         Serial.println("%. Sent to ThingSpeak.");
       }
       
@@ -166,6 +164,6 @@ void loop() {
       client.stop();
       Serial.println("Waiting...");
       
-      // ThingSpeak needs a minimum 15 sec delay between updates.
+      // ThingSpeak perlu delay 15 detik untuk setiap update
       delay(1000);
     }
